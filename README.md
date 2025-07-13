@@ -55,6 +55,10 @@ Partly based on [Amazon Alexa Remote Control](http://blog.loetzimmer.de/2017/10/
 Thank you for that work.
 
 ## Changelog:
+
+### __WORK IN PROGRESS__
+* (Apollon77) Update some version details to sync with Alexa App
+
 ### 5.0.2 (2023-11-25)
 * (Apollon77) Adjust some texts
 
