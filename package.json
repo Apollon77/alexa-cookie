@@ -21,7 +21,7 @@
     "layla.amazon.de"
   ],
   "dependencies": {
-    "cookie": "^0.6.0",
+    "cookie": "^0.7.0",
     "express": "^4.21.2",
     "http-proxy-middleware": "^2.0.9",
     "http-proxy-response-rewrite": "^0.0.1",
