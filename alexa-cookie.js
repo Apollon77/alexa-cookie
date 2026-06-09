@@ -721,6 +721,35 @@ function AlexaCookie() {
         });
     };
 
+    const finishCookieRefresh = (loginData, callback) => {
+        _options.logger && _options.logger('Alexa-Cookie: Skip App registration during refresh and update local cookies');
+        const amazonPage = loginData.amazonPage || _options.amazonPage;
+        getLocalCookies(amazonPage, loginData.refreshToken, (err, localCookie) => {
+            if (err) {
+                callback && callback(err, null);
+                return;
+            }
+
+            loginData.localCookie = localCookie;
+            getCSRFFromCookies(loginData.localCookie, _options, (err, resData) => {
+                if (err) {
+                    callback && callback(new Error(`Error getting csrf for ${amazonPage}`), null);
+                    return;
+                }
+                loginData.localCookie = resData.cookie;
+                loginData.csrf = resData.csrf;
+                loginData.amazonPage = amazonPage;
+                loginData.tokenDate = Date.now();
+                delete loginData.accessToken;
+                delete loginData.authorization_code;
+                delete loginData.verifier;
+                loginData.dataVersion = 2;
+                _options.logger && _options.logger('Alexa-Cookie: Refresh finished with updated cookies and csrf');
+                callback && callback(null, loginData);
+            });
+        });
+    };
+
     this.refreshAlexaCookie = (__options, callback) => {
         if (!__options || !__options.formerRegistrationData || !__options.formerRegistrationData.loginCookie || !__options.formerRegistrationData.refreshToken) {
             callback && callback(new Error('No former registration data provided for Cookie Refresh'), null);
@@ -798,6 +827,7 @@ function AlexaCookie() {
             getLocalCookies(_options.baseAmazonPage, _options.formerRegistrationData.refreshToken, (err, comCookie) => {
                 if (err) {
                     callback && callback(err, null);
+                    return;
                 }
 
                 // Restore frc and map-md
@@ -807,7 +837,7 @@ function AlexaCookie() {
                 newCookie += comCookie;
 
                 _options.formerRegistrationData.loginCookie = newCookie;
-                handleTokenRegistration(_options, _options.formerRegistrationData, callback);
+                finishCookieRefresh(_options.formerRegistrationData, callback);
             });
         });
     };
