@@ -520,6 +520,7 @@ function AlexaCookie() {
             Cookie = addCookies(Cookie, response.headers);
             loginData.refreshToken = body.response.success.tokens.bearer.refresh_token;
             const accessToken = body.response.success.tokens.bearer.access_token;
+            loginData.accessToken = accessToken;
             loginData.tokenDate = Date.now();
             loginData.macDms = body.response.success.tokens.mac_dms;
 
@@ -593,7 +594,6 @@ function AlexaCookie() {
                             }
                             loginData.localCookie = resData.cookie;
                             loginData.csrf = resData.csrf;
-                            delete loginData.accessToken;
                             delete loginData.authorization_code;
                             delete loginData.verifier;
                             loginData.dataVersion = 2;
@@ -723,31 +723,38 @@ function AlexaCookie() {
 
     const finishCookieRefresh = (loginData, callback) => {
         _options.logger && _options.logger('Alexa-Cookie: Skip App registration during refresh and update local cookies');
-        const amazonPage = loginData.amazonPage || _options.amazonPage;
-        getLocalCookies(amazonPage, loginData.refreshToken, (err, localCookie) => {
-            if (err) {
-                callback && callback(err, null);
-                return;
-            }
-
-            loginData.localCookie = localCookie;
-            getCSRFFromCookies(loginData.localCookie, _options, (err, resData) => {
+        const updateLocalCookies = () => {
+            const amazonPage = loginData.amazonPage || _options.amazonPage;
+            getLocalCookies(amazonPage, loginData.refreshToken, (err, localCookie) => {
                 if (err) {
-                    callback && callback(new Error(`Error getting csrf for ${amazonPage}`), null);
+                    callback && callback(err, null);
                     return;
                 }
-                loginData.localCookie = resData.cookie;
-                loginData.csrf = resData.csrf;
-                loginData.amazonPage = amazonPage;
-                loginData.tokenDate = Date.now();
-                delete loginData.accessToken;
-                delete loginData.authorization_code;
-                delete loginData.verifier;
-                loginData.dataVersion = 2;
-                _options.logger && _options.logger('Alexa-Cookie: Refresh finished with updated cookies and csrf');
-                callback && callback(null, loginData);
+
+                loginData.localCookie = localCookie;
+                getCSRFFromCookies(loginData.localCookie, _options, (err, resData) => {
+                    if (err) {
+                        callback && callback(new Error(`Error getting csrf for ${amazonPage}`), null);
+                        return;
+                    }
+                    loginData.localCookie = resData.cookie;
+                    loginData.csrf = resData.csrf;
+                    loginData.amazonPage = amazonPage;
+                    loginData.tokenDate = Date.now();
+                    delete loginData.authorization_code;
+                    delete loginData.verifier;
+                    loginData.dataVersion = 2;
+                    _options.logger && _options.logger('Alexa-Cookie: Refresh finished with updated cookies and csrf');
+                    callback && callback(null, loginData);
+                });
             });
-        });
+        };
+
+        if (loginData.accessToken) {
+            registerTokenCapabilities(loginData.accessToken, updateLocalCookies);
+            return;
+        }
+        updateLocalCookies();
     };
 
     this.refreshAlexaCookie = (__options, callback) => {
