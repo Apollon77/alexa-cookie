@@ -88,8 +88,10 @@ const req = {
 
 const target = capturedProxyOptions.router(req);
 const rewrittenPath = applyPathRewrite(req.url, req);
+const targetUrl = new URL(target);
 
-assert.strictEqual(new URL(target).host, 'www.amazon.de');
+assert.strictEqual(targetUrl.host, 'www.amazon.de');
+assert.strictEqual(targetUrl.search, '', 'router target must not duplicate query parameters supplied by pathRewrite');
 assert.ok(rewrittenPath.startsWith('/ap/signin?'), `expected signin path, got ${rewrittenPath}`);
 assert.ok(rewrittenPath.includes('openid.return_to='));
 assert.ok(rewrittenPath.includes('openid.oa2.code_challenge='));
