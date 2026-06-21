@@ -155,8 +155,7 @@ function AlexaCookie() {
                 _options.baseAmazonPageHandle = `_${amazonDomain}`;
             }
             else if (amazonDomain !== 'com') {
-                //_options.baseAmazonPageHandle = '_' + amazonDomain;
-                _options.baseAmazonPageHandle = '';
+                _options.baseAmazonPageHandle = `_${amazonDomain}`;
             }
             else {
                 _options.baseAmazonPageHandle = '';
