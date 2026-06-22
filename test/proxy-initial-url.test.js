@@ -92,6 +92,9 @@ const targetUrl = new URL(target);
 
 assert.strictEqual(targetUrl.host, 'www.amazon.de');
 assert.strictEqual(targetUrl.search, '', 'router target must not duplicate query parameters supplied by pathRewrite');
+assert.strictEqual(capturedProxyOptions.cookieDomainRewrite['*'], '');
+assert.ok(!Object.values(capturedProxyOptions.cookieDomainRewrite).includes('192.168.0.35'), 'set-cookie domain must not be rewritten to an IP address');
+assert.strictEqual(capturedProxyOptions.cookiePathRewrite['*'], '/');
 assert.ok(rewrittenPath.startsWith('/ap/signin?'), `expected signin path, got ${rewrittenPath}`);
 assert.ok(rewrittenPath.includes('openid.return_to='));
 assert.ok(rewrittenPath.includes('openid.oa2.code_challenge='));
