@@ -3,6 +3,31 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
+const testName = 'base-amazon-page-handle';
+const outputDir = process.env.ALEXA_COOKIE_TEST_OUTPUT_DIR || path.join(__dirname, '..', 'test-output');
+const outputFile = path.join(outputDir, `${testName}.txt`);
+const lines = [];
+
+function line(value = '') {
+    lines.push(value);
+}
+
+function writeOutput() {
+    fs.mkdirSync(outputDir, { recursive: true });
+    fs.writeFileSync(outputFile, `${lines.join('\n')}\n`);
+}
+
+function recordAssertion(description, fn) {
+    try {
+        fn();
+        line(`${description}: PASS`);
+    } catch (err) {
+        line(`${description}: FAIL`);
+        writeOutput();
+        throw err;
+    }
+}
+
 const cookieFile = path.join(__dirname, '..', 'alexa-cookie.js');
 const source = fs.readFileSync(cookieFile, 'utf8');
 
@@ -40,18 +65,59 @@ function loadCookieModule() {
 
 function runProxyOnlyConfig(baseAmazonPage) {
     const cookieModule = loadCookieModule();
-    cookieModule.generateAlexaCookie('', '', {
-        proxyOwnIp: '192.168.0.35',
+    const input = {
+        proxyOwnIp: '127.0.0.1',
         proxyPort: 3456,
         baseAmazonPage,
         amazonPage: baseAmazonPage,
         logger: () => {}
-    }, () => {});
-    return capturedProxyOptions;
+    };
+    cookieModule.generateAlexaCookie('', '', input, () => {});
+    return { input, output: capturedProxyOptions };
 }
 
-const deOptions = runProxyOnlyConfig('amazon.de');
-assert.strictEqual(deOptions.baseAmazonPageHandle, '_de');
+try {
+    const de = runProxyOnlyConfig('amazon.de');
+    const uk = runProxyOnlyConfig('amazon.co.uk');
+    const com = runProxyOnlyConfig('amazon.com');
 
-const comOptions = runProxyOnlyConfig('amazon.com');
-assert.strictEqual(comOptions.baseAmazonPageHandle, '');
+    line('TEST: base Amazon page handle');
+    line('');
+    line('CODE UNDER TEST:');
+    line('- alexa-cookie.js: generateAlexaCookie option initialization');
+    line('- option passed to lib/proxy.js: baseAmazonPageHandle');
+    line('');
+    line('INPUT:');
+    line(`DE baseAmazonPage: ${de.input.baseAmazonPage}`);
+    line(`DE amazonPage: ${de.input.amazonPage}`);
+    line(`UK baseAmazonPage: ${uk.input.baseAmazonPage}`);
+    line(`UK amazonPage: ${uk.input.amazonPage}`);
+    line(`COM baseAmazonPage: ${com.input.baseAmazonPage}`);
+    line(`COM amazonPage: ${com.input.amazonPage}`);
+    line('');
+    line('OBSERVED:');
+    line(`DE baseAmazonPageHandle: ${de.output.baseAmazonPageHandle}`);
+    line(`UK baseAmazonPageHandle: ${uk.output.baseAmazonPageHandle}`);
+    line(`COM baseAmazonPageHandle: ${com.output.baseAmazonPageHandle}`);
+    line('');
+    line('ASSERTIONS:');
+    recordAssertion('DE baseAmazonPageHandle === "_de"', () => {
+        assert.strictEqual(de.output.baseAmazonPageHandle, '_de');
+    });
+    recordAssertion('UK baseAmazonPageHandle === "_uk"', () => {
+        assert.strictEqual(uk.output.baseAmazonPageHandle, '_uk');
+    });
+    recordAssertion('COM baseAmazonPageHandle === ""', () => {
+        assert.strictEqual(com.output.baseAmazonPageHandle, '');
+    });
+    line('');
+    line('RESULT: PASS');
+    writeOutput();
+} catch (err) {
+    if (!lines.includes('RESULT: PASS')) {
+        line('');
+        line('RESULT: FAIL');
+        writeOutput();
+    }
+    throw err;
+}

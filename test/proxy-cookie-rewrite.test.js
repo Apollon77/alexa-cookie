@@ -4,7 +4,7 @@ const os = require('os');
 const path = require('path');
 const vm = require('vm');
 
-const testName = 'proxy-success-requires-auth-code';
+const testName = 'proxy-cookie-rewrite';
 const outputDir = process.env.ALEXA_COOKIE_TEST_OUTPUT_DIR || path.join(__dirname, '..', 'test-output');
 const outputFile = path.join(outputDir, `${testName}.txt`);
 const lines = [];
@@ -79,30 +79,8 @@ function loadProxyModule() {
     return module.exports;
 }
 
-function createProxyResponse(location) {
-    return {
-        statusCode: 302,
-        headers: {
-            location
-        },
-        socket: {
-            _host: 'www.amazon.de',
-            parser: {
-                outgoing: {
-                    method: 'POST',
-                    path: '/ap/signin',
-                    getHeader() {
-                        return undefined;
-                    }
-                }
-            }
-        }
-    };
-}
-
 const proxyModule = loadProxyModule();
-const formerDataStorePath = path.join(os.tmpdir(), `alexa-cookie-proxy-success-test-${Date.now()}.json`);
-let callbackData;
+const formerDataStorePath = path.join(os.tmpdir(), `alexa-cookie-proxy-cookie-test-${Date.now()}.json`);
 
 try {
     const input = {
@@ -116,44 +94,44 @@ try {
         proxyLogLevel: 'silent',
         formerDataStorePath
     };
-    proxyModule.initAmazonProxy(input, (_err, data) => {
-        callbackData = data;
-    });
+    proxyModule.initAmazonProxy(input);
+    const cookieDomainRewrite = capturedProxyOptions.cookieDomainRewrite || {};
+    const cookiePathRewrite = capturedProxyOptions.cookiePathRewrite || {};
+    const cookieDomainRewriteKeys = Object.keys(cookieDomainRewrite);
+    const cookiePathRewriteKeys = Object.keys(cookiePathRewrite);
 
-    const responseLocation = 'https://www.amazon.de/ap/maplanding?openid.mode=id_res&openid.return_to=https%3A%2F%2Fwww.amazon.de%2Fap%2Fmaplanding';
-    const proxyRes = createProxyResponse(responseLocation);
-    const req = {
-        method: 'POST',
-        url: '/www.amazon.de/ap/signin',
-        originalUrl: '/www.amazon.de/ap/signin'
-    };
-
-    capturedProxyOptions.onProxyRes(proxyRes, req, {});
-
-    line('TEST: proxy success requires auth code');
+    line('TEST: proxy cookie rewrite');
     line('');
     line('CODE UNDER TEST:');
-    line('- lib/proxy.js: onProxyRes()');
-    line('- lib/proxy.js: maplanding success detection');
+    line('- lib/proxy.js: cookieDomainRewrite');
+    line('- lib/proxy.js: cookiePathRewrite');
     line('');
     line('INPUT:');
-    line(`response location: ${responseLocation}`);
-    line(`request method: ${req.method}`);
-    line(`request originalUrl: ${req.originalUrl}`);
+    line(`proxyOwnIp: ${input.proxyOwnIp}`);
+    line(`baseAmazonPage: ${input.baseAmazonPage}`);
     line('');
     line('OBSERVED:');
-    line(`callback data present: ${callbackData !== undefined}`);
-    line(`final response location: ${proxyRes.headers.location}`);
+    line(`cookieDomainRewrite keys: ${cookieDomainRewriteKeys.join(', ')}`);
+    line(`cookieDomainRewrite["*"]: ${cookieDomainRewrite['*']}`);
+    line(`cookiePathRewrite keys: ${cookiePathRewriteKeys.join(', ')}`);
+    line(`cookiePathRewrite["*"]: ${cookiePathRewrite['*']}`);
+    line(`cookieDomainRewrite contains proxy IP: ${Object.values(cookieDomainRewrite).includes(input.proxyOwnIp)}`);
     line('');
     line('ASSERTIONS:');
-    recordAssertion('callbackData === undefined', () => {
-        assert.strictEqual(callbackData === undefined, true);
+    recordAssertion('cookieDomainRewrite only has "*" key', () => {
+        assert.deepStrictEqual(cookieDomainRewriteKeys, ['*']);
     });
-    recordAssertion('final location !== local /cookie-success', () => {
-        assert.notStrictEqual(proxyRes.headers.location, 'http://127.0.0.1:3456/cookie-success');
+    recordAssertion('cookieDomainRewrite["*"] === ""', () => {
+        assert.strictEqual(cookieDomainRewrite['*'], '');
     });
-    recordAssertion('final location preserves proxied maplanding path', () => {
-        assert.strictEqual(proxyRes.headers.location, 'http://127.0.0.1:3456/www.amazon.de/ap/maplanding?openid.mode=id_res&openid.return_to=https%3A%2F%2Fwww.amazon.de%2Fap%2Fmaplanding');
+    recordAssertion('cookieDomainRewrite does not contain proxy IP', () => {
+        assert.ok(!Object.values(cookieDomainRewrite).includes(input.proxyOwnIp), 'set-cookie domain must not be rewritten to an IP address');
+    });
+    recordAssertion('cookiePathRewrite only has "*" key', () => {
+        assert.deepStrictEqual(cookiePathRewriteKeys, ['*']);
+    });
+    recordAssertion('cookiePathRewrite["*"] === "/"', () => {
+        assert.strictEqual(cookiePathRewrite['*'], '/');
     });
     line('');
     line('RESULT: PASS');

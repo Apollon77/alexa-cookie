@@ -4,7 +4,7 @@ const os = require('os');
 const path = require('path');
 const vm = require('vm');
 
-const testName = 'proxy-initial-url';
+const testName = 'proxy-host-switch';
 const outputDir = process.env.ALEXA_COOKIE_TEST_OUTPUT_DIR || path.join(__dirname, '..', 'test-output');
 const outputFile = path.join(outputDir, `${testName}.txt`);
 const lines = [];
@@ -49,6 +49,7 @@ function createExpressStub() {
 }
 
 function loadProxyModule() {
+    capturedProxyOptions = undefined;
     const module = { exports: {} };
     const sandbox = {
         Buffer,
@@ -89,85 +90,66 @@ function applyPathRewrite(pathname, req) {
 }
 
 const proxyModule = loadProxyModule();
-const formerDataStorePath = path.join(os.tmpdir(), `alexa-cookie-proxy-test-${Date.now()}.json`);
+const formerDataStorePath = path.join(os.tmpdir(), `alexa-cookie-proxy-host-test-${Date.now()}.json`);
 
 try {
     const input = {
         proxyOwnIp: '127.0.0.1',
         proxyPort: 3456,
         proxyListenBind: '0.0.0.0',
-        baseAmazonPage: 'amazon.co.uk',
-        baseAmazonPageHandle: '_uk',
-        amazonPageProxyLanguage: 'en_GB',
-        acceptLanguage: 'en-GB',
+        baseAmazonPage: 'amazon.de',
+        baseAmazonPageHandle: '_de',
+        amazonPageProxyLanguage: 'de_DE',
+        acceptLanguage: 'de-DE',
         proxyLogLevel: 'silent',
         formerDataStorePath
     };
     proxyModule.initAmazonProxy(input);
 
-    const req = {
+    const directReq = {
         method: 'GET',
-        url: '/',
+        url: '/www.amazon.com/ap/signin',
+        headers: { host: '127.0.0.1:3456' }
+    };
+    const refererReq = {
+        method: 'POST',
+        url: '/ap/cvf/verify',
         headers: {
-            host: '127.0.0.1:3456'
+            host: '127.0.0.1:3456',
+            referer: 'http://127.0.0.1:3456/www.amazon.com/ap/signin'
         }
     };
 
-    const target = capturedProxyOptions.router(req);
-    const rewrittenPath = applyPathRewrite(req.url, req);
-    const targetUrl = new URL(target);
-    const rewrittenUrl = new URL(rewrittenPath, target);
+    const directTarget = capturedProxyOptions.router(directReq);
+    const directRewrittenPath = applyPathRewrite(directReq.url, directReq);
+    const refererTarget = capturedProxyOptions.router(refererReq);
 
-    line('TEST: proxy initial URL');
+    line('TEST: proxy host switch');
     line('');
     line('CODE UNDER TEST:');
     line('- lib/proxy.js: router()');
-    line('- lib/proxy.js: pathRewrite / rewriteProxyPath()');
-    line('- lib/proxy.js: buildInitialUrl()');
+    line('- lib/proxy.js: rewriteProxyPath()');
     line('');
     line('INPUT:');
     line(`baseAmazonPage: ${input.baseAmazonPage}`);
-    line(`baseAmazonPageHandle: ${input.baseAmazonPageHandle}`);
-    line(`proxy host header: ${req.headers.host}`);
-    line(`request url: ${req.url}`);
+    line(`direct request url: ${directReq.url}`);
+    line(`referer request url: ${refererReq.url}`);
+    line(`referer header: ${refererReq.headers.referer}`);
     line('');
     line('OBSERVED:');
-    line(`router target host: ${targetUrl.host}`);
-    line(`router target search: ${targetUrl.search}`);
-    line(`rewritten pathname: ${rewrittenUrl.pathname}`);
-    line(`rewritten openid.assoc_handle: ${rewrittenUrl.searchParams.get('openid.assoc_handle')}`);
-    line(`rewritten pageId: ${rewrittenUrl.searchParams.get('pageId')}`);
-    line(`rewritten openid.return_to: ${rewrittenUrl.searchParams.get('openid.return_to')}`);
-    line(`rewritten openid.ns.oa2: ${rewrittenUrl.searchParams.get('openid.ns.oa2')}`);
-    line(`rewritten path starts with /ap/signin?: ${rewrittenPath.startsWith('/ap/signin?')}`);
-    line(`rewritten path contains openid.return_to: ${rewrittenPath.includes('openid.return_to=')}`);
-    line(`rewritten path contains regional handle: ${rewrittenPath.includes('amzn_dp_project_dee_ios_uk')}`);
-    line(`rewritten path contains code challenge: ${rewrittenPath.includes('openid.oa2.code_challenge=')}`);
+    line(`direct router target: ${directTarget}`);
+    line(`direct rewritten path: ${directRewrittenPath}`);
+    line(`referer router target: ${refererTarget}`);
     line('');
     line('ASSERTIONS:');
-    recordAssertion('router target host === "www.amazon.co.uk"', () => {
-        assert.strictEqual(targetUrl.host, 'www.amazon.co.uk');
+    recordAssertion('direct router target === "https://www.amazon.com"', () => {
+        assert.strictEqual(directTarget, 'https://www.amazon.com');
     });
-    recordAssertion('router target search === ""', () => {
-        assert.ok(targetUrl.search === '', 'router target search must be empty');
+    recordAssertion('direct rewritten path === "/ap/signin"', () => {
+        assert.strictEqual(directRewrittenPath, '/ap/signin');
     });
-    recordAssertion('rewritten path starts with "/ap/signin?"', () => {
-        assert.ok(rewrittenPath.startsWith('/ap/signin?'), `expected signin path, got ${rewrittenPath}`);
-    });
-    recordAssertion('rewritten assoc handle === "amzn_dp_project_dee_ios_uk"', () => {
-        assert.strictEqual(rewrittenUrl.searchParams.get('openid.assoc_handle'), 'amzn_dp_project_dee_ios_uk');
-    });
-    recordAssertion('rewritten pageId === "amzn_dp_project_dee_ios_uk"', () => {
-        assert.strictEqual(rewrittenUrl.searchParams.get('pageId'), 'amzn_dp_project_dee_ios_uk');
-    });
-    recordAssertion('rewritten path contains "openid.return_to="', () => {
-        assert.ok(rewrittenPath.includes('openid.return_to='));
-    });
-    recordAssertion('rewritten path contains regional "_uk" handle', () => {
-        assert.ok(rewrittenPath.includes('amzn_dp_project_dee_ios_uk'));
-    });
-    recordAssertion('rewritten path contains "openid.oa2.code_challenge="', () => {
-        assert.ok(rewrittenPath.includes('openid.oa2.code_challenge='));
+    recordAssertion('referer router target === "https://www.amazon.com"', () => {
+        assert.strictEqual(refererTarget, 'https://www.amazon.com');
     });
     line('');
     line('RESULT: PASS');
