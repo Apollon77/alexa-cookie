@@ -39,6 +39,19 @@ function AlexaCookie() {
 
     let Cookie = '';
 
+    const isAmazonCookieName = name => /^(session-id|session-id-time|session-token|ubid-.+|lc-.+|x-.+|at-.+|sess-at-.+|frc|map-md|csrf|sid|csm-hit|i18n-prefs|sp-cdn|skin)$/.test(name);
+
+    const sanitizeAmazonCookie = cookie => {
+        const cookies = cookieTools.parse(cookie || '');
+        let sanitizedCookie = '';
+        for (const name of Object.keys(cookies)) {
+            if (isAmazonCookieName(name)) {
+                sanitizedCookie += `${name}=${cookies[name]}; `;
+            }
+        }
+        return sanitizedCookie.replace(/[; ]*$/, '');
+    };
+
     const addCookies = (Cookie, headers) => {
         if (!headers || !headers['set-cookie']) return Cookie;
         const cookies = cookieTools.parse(Cookie || '');
@@ -407,6 +420,7 @@ function AlexaCookie() {
         _options.logger && _options.logger(`Handle token registration Start: ${JSON.stringify(loginData)}`);
 
         loginData.deviceAppName = _options.deviceAppName;
+        loginData.loginCookie = sanitizeAmazonCookie(loginData.loginCookie);
 
         let deviceSerial;
         if (!_options.formerRegistrationData || !_options.formerRegistrationData.deviceSerial) {
@@ -553,22 +567,34 @@ function AlexaCookie() {
                 _options.logger && _options.logger(JSON.stringify(options));
                 request(options, (error, response, body) => {
                     if (!error) {
-                        try {
-                            if (typeof body !== 'object') body = JSON.parse(body);
-                        } catch (err) {
+                        if (!response || response.statusCode < 200 || response.statusCode >= 300 || !body) {
+                            _options.logger && _options.logger(`Get User data Response: status=${response && response.statusCode}, body=${JSON.stringify(body)}`);
+                            if (!_options.amazonPage) {
+                                callback && callback(new Error(`Could not get user data from Amazon: HTTP ${response && response.statusCode}`), null);
+                                return;
+                            }
+                            loginData.amazonPage = _options.amazonPage;
+                        } else {
+                            try {
+                                if (typeof body !== 'object') body = JSON.parse(body);
+                            } catch (err) {
+                                _options.logger && _options.logger(`Get User data Response: ${JSON.stringify(body)}`);
+                                if (!_options.amazonPage) {
+                                    callback && callback(err, null);
+                                    return;
+                                }
+                                loginData.amazonPage = _options.amazonPage;
+                            }
                             _options.logger && _options.logger(`Get User data Response: ${JSON.stringify(body)}`);
-                            callback && callback(err, null);
-                            return;
-                        }
-                        _options.logger && _options.logger(`Get User data Response: ${JSON.stringify(body)}`);
 
-                        Cookie = addCookies(Cookie, response.headers);
+                            Cookie = addCookies(Cookie, response.headers);
 
-                        if (body.marketPlaceDomainName) {
-                            const pos = body.marketPlaceDomainName.indexOf('.');
-                            if (pos !== -1) _options.amazonPage = body.marketPlaceDomainName.substr(pos + 1);
+                            if (body && body.marketPlaceDomainName) {
+                                const pos = body.marketPlaceDomainName.indexOf('.');
+                                if (pos !== -1) _options.amazonPage = body.marketPlaceDomainName.substr(pos + 1);
+                            }
+                            loginData.amazonPage = _options.amazonPage;
                         }
-                        loginData.amazonPage = _options.amazonPage;
                     } else if (error && (!_options || !_options.amazonPage)) {
                         callback && callback(error, null);
                         return;
@@ -583,6 +609,7 @@ function AlexaCookie() {
                     getLocalCookies(loginData.amazonPage, loginData.refreshToken, (err, localCookie) => {
                         if (err) {
                             callback && callback(err, null);
+                            return;
                         }
 
                         loginData.localCookie = localCookie;
@@ -842,7 +869,7 @@ function AlexaCookie() {
                 newCookie += `map-md=${initCookies['map-md']}; `;
                 newCookie += comCookie;
 
-                _options.formerRegistrationData.loginCookie = newCookie;
+                _options.formerRegistrationData.loginCookie = sanitizeAmazonCookie(newCookie);
                 finishCookieRefresh(_options.formerRegistrationData, callback);
             });
         });
