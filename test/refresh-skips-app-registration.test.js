@@ -206,6 +206,7 @@ function refresh(cookieModule, options) {
         line(`result has csrf: ${Boolean(result.csrf)}`);
         line(`result has authorization_code: ${Object.prototype.hasOwnProperty.call(result, 'authorization_code')}`);
         line(`result has verifier: ${Object.prototype.hasOwnProperty.call(result, 'verifier')}`);
+        line(`result loginCookie includes exchange-cookie: ${result.loginCookie.includes('exchange-cookie=EXCHANGE_HEADER')}`);
         line(`result localCookie includes refreshed session-id: ${result.localCookie.includes('session-id=SID_LOCAL')}`);
         line('');
         line('ASSERTIONS:');
@@ -245,6 +246,9 @@ function refresh(cookieModule, options) {
         });
         recordAssertion('result localCookie contains exchanged session-id', () => {
             assert.ok(result.localCookie.includes('session-id=SID_LOCAL'));
+        });
+        recordAssertion('result loginCookie excludes non-Amazon exchange response cookie', () => {
+            assert.ok(!result.loginCookie.includes('exchange-cookie=EXCHANGE_HEADER'));
         });
         recordAssertion('result does not keep authorization_code', () => {
             assert.strictEqual(Object.prototype.hasOwnProperty.call(result, 'authorization_code'), false);
