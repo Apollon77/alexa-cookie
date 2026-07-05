@@ -39,6 +39,19 @@ function AlexaCookie() {
 
     let Cookie = '';
 
+    const isAmazonCookieName = name => /^(session-id|session-id-time|session-token|ubid-.+|lc-.+|x-.+|at-.+|sess-at-.+|frc|map-md|csrf|sid|csm-hit|i18n-prefs|sp-cdn|skin)$/.test(name);
+
+    const sanitizeAmazonCookie = cookie => {
+        const cookies = cookieTools.parse(cookie || '');
+        let sanitizedCookie = '';
+        for (const name of Object.keys(cookies)) {
+            if (isAmazonCookieName(name)) {
+                sanitizedCookie += `${name}=${cookies[name]}; `;
+            }
+        }
+        return sanitizedCookie.replace(/[; ]*$/, '');
+    };
+
     const addCookies = (Cookie, headers) => {
         if (!headers || !headers['set-cookie']) return Cookie;
         const cookies = cookieTools.parse(Cookie || '');
@@ -155,8 +168,7 @@ function AlexaCookie() {
                 _options.baseAmazonPageHandle = `_${amazonDomain}`;
             }
             else if (amazonDomain !== 'com') {
-                //_options.baseAmazonPageHandle = '_' + amazonDomain;
-                _options.baseAmazonPageHandle = '';
+                _options.baseAmazonPageHandle = `_${amazonDomain}`;
             }
             else {
                 _options.baseAmazonPageHandle = '';
@@ -408,6 +420,7 @@ function AlexaCookie() {
         _options.logger && _options.logger(`Handle token registration Start: ${JSON.stringify(loginData)}`);
 
         loginData.deviceAppName = _options.deviceAppName;
+        loginData.loginCookie = sanitizeAmazonCookie(loginData.loginCookie);
 
         let deviceSerial;
         if (!_options.formerRegistrationData || !_options.formerRegistrationData.deviceSerial) {
@@ -520,6 +533,7 @@ function AlexaCookie() {
             Cookie = addCookies(Cookie, response.headers);
             loginData.refreshToken = body.response.success.tokens.bearer.refresh_token;
             const accessToken = body.response.success.tokens.bearer.access_token;
+            loginData.accessToken = accessToken;
             loginData.tokenDate = Date.now();
             loginData.macDms = body.response.success.tokens.mac_dms;
 
@@ -553,22 +567,34 @@ function AlexaCookie() {
                 _options.logger && _options.logger(JSON.stringify(options));
                 request(options, (error, response, body) => {
                     if (!error) {
-                        try {
-                            if (typeof body !== 'object') body = JSON.parse(body);
-                        } catch (err) {
+                        if (!response || response.statusCode < 200 || response.statusCode >= 300 || !body) {
+                            _options.logger && _options.logger(`Get User data Response: status=${response && response.statusCode}, body=${JSON.stringify(body)}`);
+                            if (!_options.amazonPage) {
+                                callback && callback(new Error(`Could not get user data from Amazon: HTTP ${response && response.statusCode}`), null);
+                                return;
+                            }
+                            loginData.amazonPage = _options.amazonPage;
+                        } else {
+                            try {
+                                if (typeof body !== 'object') body = JSON.parse(body);
+                            } catch (err) {
+                                _options.logger && _options.logger(`Get User data Response: ${JSON.stringify(body)}`);
+                                if (!_options.amazonPage) {
+                                    callback && callback(err, null);
+                                    return;
+                                }
+                                loginData.amazonPage = _options.amazonPage;
+                            }
                             _options.logger && _options.logger(`Get User data Response: ${JSON.stringify(body)}`);
-                            callback && callback(err, null);
-                            return;
-                        }
-                        _options.logger && _options.logger(`Get User data Response: ${JSON.stringify(body)}`);
 
-                        Cookie = addCookies(Cookie, response.headers);
+                            Cookie = addCookies(Cookie, response.headers);
 
-                        if (body.marketPlaceDomainName) {
-                            const pos = body.marketPlaceDomainName.indexOf('.');
-                            if (pos !== -1) _options.amazonPage = body.marketPlaceDomainName.substr(pos + 1);
+                            if (body && body.marketPlaceDomainName) {
+                                const pos = body.marketPlaceDomainName.indexOf('.');
+                                if (pos !== -1) _options.amazonPage = body.marketPlaceDomainName.substr(pos + 1);
+                            }
+                            loginData.amazonPage = _options.amazonPage;
                         }
-                        loginData.amazonPage = _options.amazonPage;
                     } else if (error && (!_options || !_options.amazonPage)) {
                         callback && callback(error, null);
                         return;
@@ -583,6 +609,7 @@ function AlexaCookie() {
                     getLocalCookies(loginData.amazonPage, loginData.refreshToken, (err, localCookie) => {
                         if (err) {
                             callback && callback(err, null);
+                            return;
                         }
 
                         loginData.localCookie = localCookie;
@@ -593,7 +620,6 @@ function AlexaCookie() {
                             }
                             loginData.localCookie = resData.cookie;
                             loginData.csrf = resData.csrf;
-                            delete loginData.accessToken;
                             delete loginData.authorization_code;
                             delete loginData.verifier;
                             loginData.dataVersion = 2;
@@ -721,6 +747,42 @@ function AlexaCookie() {
         });
     };
 
+    const finishCookieRefresh = (loginData, callback) => {
+        _options.logger && _options.logger('Alexa-Cookie: Skip App registration during refresh and update local cookies');
+        const updateLocalCookies = () => {
+            const amazonPage = loginData.amazonPage || _options.amazonPage;
+            getLocalCookies(amazonPage, loginData.refreshToken, (err, localCookie) => {
+                if (err) {
+                    callback && callback(err, null);
+                    return;
+                }
+
+                loginData.localCookie = localCookie;
+                getCSRFFromCookies(loginData.localCookie, _options, (err, resData) => {
+                    if (err) {
+                        callback && callback(new Error(`Error getting csrf for ${amazonPage}`), null);
+                        return;
+                    }
+                    loginData.localCookie = resData.cookie;
+                    loginData.csrf = resData.csrf;
+                    loginData.amazonPage = amazonPage;
+                    loginData.tokenDate = Date.now();
+                    delete loginData.authorization_code;
+                    delete loginData.verifier;
+                    loginData.dataVersion = 2;
+                    _options.logger && _options.logger('Alexa-Cookie: Refresh finished with updated cookies and csrf');
+                    callback && callback(null, loginData);
+                });
+            });
+        };
+
+        if (loginData.accessToken) {
+            registerTokenCapabilities(loginData.accessToken, updateLocalCookies);
+            return;
+        }
+        updateLocalCookies();
+    };
+
     this.refreshAlexaCookie = (__options, callback) => {
         if (!__options || !__options.formerRegistrationData || !__options.formerRegistrationData.loginCookie || !__options.formerRegistrationData.refreshToken) {
             callback && callback(new Error('No former registration data provided for Cookie Refresh'), null);
@@ -798,6 +860,7 @@ function AlexaCookie() {
             getLocalCookies(_options.baseAmazonPage, _options.formerRegistrationData.refreshToken, (err, comCookie) => {
                 if (err) {
                     callback && callback(err, null);
+                    return;
                 }
 
                 // Restore frc and map-md
@@ -806,8 +869,8 @@ function AlexaCookie() {
                 newCookie += `map-md=${initCookies['map-md']}; `;
                 newCookie += comCookie;
 
-                _options.formerRegistrationData.loginCookie = newCookie;
-                handleTokenRegistration(_options, _options.formerRegistrationData, callback);
+                _options.formerRegistrationData.loginCookie = sanitizeAmazonCookie(newCookie);
+                finishCookieRefresh(_options.formerRegistrationData, callback);
             });
         });
     };
