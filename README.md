@@ -55,8 +55,7 @@ Partly based on [Amazon Alexa Remote Control](http://blog.loetzimmer.de/2017/10/
 Thank you for that work.
 
 ## Changelog:
-
-### **WORK IN PROGRESS**
+### 5.0.4 (2026-07-05)
 * (@fkhr79, @blabond) Fix Amazon login proxy auth flow
 
 ### 5.0.3 (2025-07-13)
