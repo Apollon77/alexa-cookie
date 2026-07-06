@@ -41,6 +41,7 @@
     "url": "https://github.com/Apollon77/alexa-cookie/issues"
   },
   "scripts": {
+    "test": "node test/run-tests.js",
     "release": "release-script"
   },
   "engines": {
