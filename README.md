@@ -55,8 +55,7 @@ Partly based on [Amazon Alexa Remote Control](http://blog.loetzimmer.de/2017/10/
 Thank you for that work.
 
 ## Changelog:
-
-### **WORK IN PROGRESS**
+### 5.0.5 (2026-07-06)
 * (@Apollon77) Fix Proxy URL when no static port is provided
 
 ### 5.0.4 (2026-07-05)
