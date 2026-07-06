@@ -79,6 +79,25 @@ function loadProxyModule() {
     return module.exports;
 }
 
+function createProxyRequest(initialHeaders = {}) {
+    const headers = {};
+    for (const name of Object.keys(initialHeaders)) {
+        headers[name.toLowerCase()] = initialHeaders[name];
+    }
+
+    return {
+        getHeader(name) {
+            return headers[name.toLowerCase()];
+        },
+        setHeader(name, value) {
+            headers[name.toLowerCase()] = value;
+        },
+        getHeaders() {
+            return { ...headers };
+        }
+    };
+}
+
 function applyPathRewrite(pathname, req) {
     const rewrite = capturedProxyOptions.pathRewrite;
     if (typeof rewrite === 'function') return rewrite(pathname, req);
@@ -114,6 +133,7 @@ try {
     const refererReq = {
         method: 'POST',
         url: '/ap/cvf/verify',
+        on() {},
         headers: {
             host: '127.0.0.1:3456',
             referer: 'http://127.0.0.1:3456/www.amazon.com/ap/signin'
@@ -123,6 +143,13 @@ try {
     const directTarget = capturedProxyOptions.router(directReq);
     const directRewrittenPath = applyPathRewrite(directReq.url, directReq);
     const refererTarget = capturedProxyOptions.router(refererReq);
+    const refererRewrittenPath = applyPathRewrite(refererReq.url, refererReq);
+    const refererProxyReq = createProxyRequest({
+        host: 'www.amazon.com',
+        referer: 'http://127.0.0.1:3456/www.amazon.com/ap/signin'
+    });
+    capturedProxyOptions.onProxyReq(refererProxyReq, refererReq, {});
+    const refererProxyHeaders = refererProxyReq.getHeaders();
 
     line('TEST: proxy host switch');
     line('');
@@ -140,6 +167,9 @@ try {
     line(`direct router target: ${directTarget}`);
     line(`direct rewritten path: ${directRewrittenPath}`);
     line(`referer router target: ${refererTarget}`);
+    line(`referer rewritten path: ${refererRewrittenPath}`);
+    line(`referer proxy request referer: ${refererProxyHeaders.referer}`);
+    line(`referer proxy request origin: ${refererProxyHeaders.origin}`);
     line('');
     line('ASSERTIONS:');
     recordAssertion('direct router target === "https://www.amazon.com"', () => {
@@ -150,6 +180,15 @@ try {
     });
     recordAssertion('referer router target === "https://www.amazon.com"', () => {
         assert.strictEqual(refererTarget, 'https://www.amazon.com');
+    });
+    recordAssertion('referer rewritten path === "/ap/cvf/verify"', () => {
+        assert.strictEqual(refererRewrittenPath, '/ap/cvf/verify');
+    });
+    recordAssertion('referer proxy request restores Amazon referer', () => {
+        assert.strictEqual(refererProxyHeaders.referer, 'https://www.amazon.com/ap/signin');
+    });
+    recordAssertion('referer proxy request sets matching Amazon origin', () => {
+        assert.strictEqual(refererProxyHeaders.origin, 'https://www.amazon.com');
     });
     line('');
     line('RESULT: PASS');
