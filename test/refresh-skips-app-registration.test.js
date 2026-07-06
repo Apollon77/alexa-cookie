@@ -123,7 +123,7 @@ function createFakeHttps(calls) {
                     host: options.host,
                     path: options.path,
                     status: null,
-                    hasAuthorization: Boolean(options.headers && options.headers.authorization),
+                    authorization: options.headers && options.headers.authorization,
                     bodyLength: requestBody.length
                 });
                 const response = responseFor(options);
@@ -177,6 +177,7 @@ function refresh(cookieModule, options) {
 
         const paths = calls.map((call) => call.path);
         const capabilityCall = calls.find((call) => call.path === '/v1/devices/@self/capabilities');
+        const loginCookies = parseCookies(result.loginCookie);
 
         line('TEST: refresh skips app registration');
         line('');
@@ -206,7 +207,9 @@ function refresh(cookieModule, options) {
         line(`result has csrf: ${Boolean(result.csrf)}`);
         line(`result has authorization_code: ${Object.prototype.hasOwnProperty.call(result, 'authorization_code')}`);
         line(`result has verifier: ${Object.prototype.hasOwnProperty.call(result, 'verifier')}`);
-        line(`result loginCookie includes exchange-cookie: ${result.loginCookie.includes('exchange-cookie=EXCHANGE_HEADER')}`);
+        line(`result loginCookie frc: ${loginCookies.frc}`);
+        line(`result loginCookie map-md: ${loginCookies['map-md']}`);
+        line(`result loginCookie session-id: ${loginCookies['session-id']}`);
         line(`result localCookie includes refreshed session-id: ${result.localCookie.includes('session-id=SID_LOCAL')}`);
         line('');
         line('ASSERTIONS:');
@@ -230,7 +233,7 @@ function refresh(cookieModule, options) {
             assert.strictEqual(capabilityCall.method, 'PUT');
         });
         recordAssertion('capability request has authorization header', () => {
-            assert.strictEqual(capabilityCall.hasAuthorization, true);
+            assert.strictEqual(capabilityCall.authorization, 'Bearer ACCESS_TOKEN_AFTER_REFRESH');
         });
         recordAssertion('result accessToken was refreshed', () => {
             assert.strictEqual(result.accessToken, 'ACCESS_TOKEN_AFTER_REFRESH');
@@ -241,6 +244,13 @@ function refresh(cookieModule, options) {
         recordAssertion('result macDms preserved', () => {
             assert.strictEqual(result.macDms, 'MAC_DMS_OLD');
         });
+        recordAssertion('result loginCookie preserves frc and map-md', () => {
+            assert.strictEqual(loginCookies.frc, 'FRC_OLD');
+            assert.strictEqual(loginCookies['map-md'], 'MAPMD_OLD');
+        });
+        recordAssertion('result loginCookie contains refreshed base session-id', () => {
+            assert.strictEqual(loginCookies['session-id'], 'SID_LOCAL');
+        });
         recordAssertion('result csrf refreshed from API cookie', () => {
             assert.strictEqual(result.csrf, 'CSRF_FROM_API');
         });
@@ -248,7 +258,7 @@ function refresh(cookieModule, options) {
             assert.ok(result.localCookie.includes('session-id=SID_LOCAL'));
         });
         recordAssertion('result loginCookie excludes non-Amazon exchange response cookie', () => {
-            assert.ok(!result.loginCookie.includes('exchange-cookie=EXCHANGE_HEADER'));
+            assert.strictEqual(loginCookies['exchange-cookie'], undefined);
         });
         recordAssertion('result does not keep authorization_code', () => {
             assert.strictEqual(Object.prototype.hasOwnProperty.call(result, 'authorization_code'), false);
