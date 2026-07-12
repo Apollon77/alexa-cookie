@@ -117,6 +117,10 @@ try {
     const rewrittenPath = applyPathRewrite(req.url, req);
     const targetUrl = new URL(target);
     const rewrittenUrl = new URL(rewrittenPath, target);
+    const expectedReturnTo = 'https://www.amazon.co.uk/ap/maplanding';
+    const expectedOAuthNamespace = 'http://www.amazon.co.uk/ap/ext/oauth/2';
+    const clientId = rewrittenUrl.searchParams.get('openid.oa2.client_id');
+    const codeChallenge = rewrittenUrl.searchParams.get('openid.oa2.code_challenge');
 
     line('TEST: proxy initial URL');
     line('');
@@ -139,9 +143,13 @@ try {
     line(`rewritten pageId: ${rewrittenUrl.searchParams.get('pageId')}`);
     line(`rewritten openid.return_to: ${rewrittenUrl.searchParams.get('openid.return_to')}`);
     line(`rewritten openid.ns.oa2: ${rewrittenUrl.searchParams.get('openid.ns.oa2')}`);
+    line(`rewritten openid.oa2.client_id: ${clientId}`);
+    line(`rewritten openid.oa2.response_type: ${rewrittenUrl.searchParams.get('openid.oa2.response_type')}`);
+    line(`rewritten openid.oa2.scope: ${rewrittenUrl.searchParams.get('openid.oa2.scope')}`);
+    line(`rewritten openid.oa2.code_challenge_method: ${rewrittenUrl.searchParams.get('openid.oa2.code_challenge_method')}`);
+    line(`rewritten language: ${rewrittenUrl.searchParams.get('language')}`);
     line(`rewritten path starts with /ap/signin?: ${rewrittenPath.startsWith('/ap/signin?')}`);
     line(`rewritten path contains openid.return_to: ${rewrittenPath.includes('openid.return_to=')}`);
-    line(`rewritten path contains regional handle: ${rewrittenPath.includes('amzn_dp_project_dee_ios_uk')}`);
     line(`rewritten path contains code challenge: ${rewrittenPath.includes('openid.oa2.code_challenge=')}`);
     line('');
     line('ASSERTIONS:');
@@ -160,14 +168,23 @@ try {
     recordAssertion('rewritten pageId === "amzn_dp_project_dee_ios_uk"', () => {
         assert.strictEqual(rewrittenUrl.searchParams.get('pageId'), 'amzn_dp_project_dee_ios_uk');
     });
-    recordAssertion('rewritten path contains "openid.return_to="', () => {
-        assert.ok(rewrittenPath.includes('openid.return_to='));
+    recordAssertion('rewritten return_to targets regional maplanding', () => {
+        assert.strictEqual(rewrittenUrl.searchParams.get('openid.return_to'), expectedReturnTo);
     });
-    recordAssertion('rewritten path contains regional "_uk" handle', () => {
-        assert.ok(rewrittenPath.includes('amzn_dp_project_dee_ios_uk'));
+    recordAssertion('rewritten OAuth namespace targets regional Amazon page', () => {
+        assert.strictEqual(rewrittenUrl.searchParams.get('openid.ns.oa2'), expectedOAuthNamespace);
     });
-    recordAssertion('rewritten path contains "openid.oa2.code_challenge="', () => {
-        assert.ok(rewrittenPath.includes('openid.oa2.code_challenge='));
+    recordAssertion('rewritten OAuth request asks for device auth code', () => {
+        assert.ok(clientId && clientId.startsWith('device:'), 'client id must identify generated device');
+        assert.strictEqual(rewrittenUrl.searchParams.get('openid.oa2.response_type'), 'code');
+        assert.strictEqual(rewrittenUrl.searchParams.get('openid.oa2.scope'), 'device_auth_access');
+    });
+    recordAssertion('rewritten code challenge uses S256 and is present', () => {
+        assert.strictEqual(rewrittenUrl.searchParams.get('openid.oa2.code_challenge_method'), 'S256');
+        assert.ok(codeChallenge && codeChallenge.length > 20, 'code challenge must not be empty');
+    });
+    recordAssertion('rewritten language matches proxy language', () => {
+        assert.strictEqual(rewrittenUrl.searchParams.get('language'), input.amazonPageProxyLanguage);
     });
     line('');
     line('RESULT: PASS');
