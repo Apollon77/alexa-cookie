@@ -100,12 +100,20 @@ function createFakeHttps(calls) {
                 })
             };
         }
-        if (options.path === '/api/language') {
+        if (options.path === '/api/strings') {
             return {
                 statusCode: 200,
                 headers: { 'set-cookie': ['csrf=CSRF_FROM_API; Path=/; Domain=.amazon.de'] },
                 body: '{}'
             };
+        }
+        if ([
+            '/api/language',
+            '/spa/index.html',
+            '/api/devices-v2/device?cached=false',
+            '/templates/oobe/d-device-pick.handlebars'
+        ].includes(options.path)) {
+            return { statusCode: 200, headers: {}, body: '{}' };
         }
         throw new Error(`Unexpected request: ${options.method || 'GET'} ${options.host}${options.path}`);
     }
@@ -168,6 +176,13 @@ function refresh(cookieModule, options) {
 
     try {
         const result = await refresh(cookieModule, {
+            baseAmazonPage: 'amazon.de',
+            amazonPage: 'amazon.de',
+            acceptLanguage: 'de-DE',
+            formerRegistrationData,
+            logger: () => {}
+        });
+        const secondResult = await refresh(cookieModule, {
             baseAmazonPage: 'amazon.de',
             amazonPage: 'amazon.de',
             acceptLanguage: 'de-DE',
@@ -243,6 +258,10 @@ function refresh(cookieModule, options) {
         });
         recordAssertion('result csrf refreshed from API cookie', () => {
             assert.strictEqual(result.csrf, 'CSRF_FROM_API');
+        });
+        recordAssertion('consecutive refresh retries all CSRF endpoints', () => {
+            assert.strictEqual(paths.filter(path => path === '/api/strings').length, 2);
+            assert.strictEqual(secondResult.csrf, 'CSRF_FROM_API');
         });
         recordAssertion('result localCookie contains exchanged session-id', () => {
             assert.ok(result.localCookie.includes('session-id=SID_LOCAL'));

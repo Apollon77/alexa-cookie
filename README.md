@@ -55,6 +55,11 @@ Partly based on [Amazon Alexa Remote Control](http://blog.loetzimmer.de/2017/10/
 Thank you for that work.
 
 ## Changelog:
+
+### __WORK IN PROGRESS__
+* (GiacomoCa) Do not replace amazon URLs inside parameters to prevent redirect and rewrite issues; Fixes 404 errors during 2FA
+* (sidey79) Allows to fetch Cookies multiple times with one instance
+
 ### 5.0.5 (2026-07-06)
 * (@Apollon77) Fix Proxy URL when no static port is provided
 
