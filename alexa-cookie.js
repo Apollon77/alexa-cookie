@@ -216,7 +216,7 @@ function AlexaCookie() {
 
     const getCSRFFromCookies = (cookie, _options, callback) => {
         // get CSRF
-        const csrfUrls = csrfOptions;
+        const csrfUrls = [...csrfOptions];
 
         function csrfTry() {
             const path = csrfUrls.shift();
