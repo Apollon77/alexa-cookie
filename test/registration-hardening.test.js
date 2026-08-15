@@ -245,6 +245,7 @@ try {
         assert.strictEqual(localCookieErrorScenario.callbacks.length, 1);
         assert.ok(localCookieErrorScenario.callbacks[0].err);
         assert.match(localCookieErrorScenario.callbacks[0].err.message, /No cookies in Exchange response/);
+        assert.strictEqual(localCookieErrorScenario.callbacks[0].data, null);
         assert.strictEqual(localCookieErrorScenario.calls.filter((call) => call.path === '/api/language').length, 0);
     });
 
