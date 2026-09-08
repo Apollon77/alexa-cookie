@@ -875,6 +875,40 @@ function AlexaCookie() {
         });
     };
 
+    /**
+     * Espone `handleTokenRegistration` (altrimenti privata alla closure) per i
+     * flussi di login che NON passano da `initAmazonProxy` — es. un browser
+     * headless pilotato da fuori (Camoufox) che ha già ottenuto `loginCookie` +
+     * `authorization_code` navigando Amazon per conto proprio. Fa lo stesso
+     * scambio OAuth (device registration + token) che i due path interni
+     * (proxy e login diretto via `request()`) fanno dopo `getCSRFFromCookies`.
+     */
+    this.handleTokenRegistration = (options, loginData, callback) => handleTokenRegistration(options, loginData, callback);
+
+    /**
+     * Espone anche `initConfig` (stessa motivazione di `handleTokenRegistration`
+     * sopra): applica gli stessi default (baseAmazonPageHandle, deviceAppName,
+     * acceptLanguage, amazonPageProxyLanguage, userAgent…) che il proxy usa per
+     * costruire l'URL di signin PKCE — un chiamante esterno non deve
+     * duplicarli a mano e rischiare di disallinearsi quando cambiano qui.
+     *
+     * NON ripristina `_options` al valore precedente (a differenza di una prima
+     * versione di questa patch): `_options` è il singleton di modulo che
+     * `handleTokenRegistration` stesso usa per le chiamate successive
+     * (`registerTokenCapabilities`, `getLocalCookies` leggono `_options`
+     * direttamente, non un parametro) — lo stesso pattern non-transazionale
+     * già usato internamente alle righe 794-797. Un chiamante esterno deve
+     * quindi invocare `initConfig(options)` e poi passare lo STESSO `options`
+     * a `handleTokenRegistration` nella stessa sequenza sincrona, prima che
+     * un altro flusso (es. il refresh cookie di un'istanza AlexaRemote già
+     * connessa) rimetta `_options` sul proprio valore.
+     */
+    this.initConfig = (options) => {
+        _options = options;
+        initConfig();
+        return options;
+    };
+
     this.stopProxyServer = (callback) => {
         if (proxyServer) {
             proxyServer.close(() => {

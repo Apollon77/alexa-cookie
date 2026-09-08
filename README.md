@@ -55,6 +55,9 @@ Partly based on [Amazon Alexa Remote Control](http://blog.loetzimmer.de/2017/10/
 Thank you for that work.
 
 ## Changelog:
+### 5.0.7 (WIP)
+* (f-liva) Add `proxyHttps` option: when `true`, keeps the `Secure` flag on proxied Set-Cookie headers and uses `https://` for the proxy's own redirects/URLs, instead of always stripping `Secure` and hardcoding `http://`. Needed when the proxy itself only speaks plain HTTP but sits behind a real HTTPS-terminating reverse proxy/tunnel — Amazon sets `SameSite=None` cookies, which Chrome/Firefox reject outright when `Secure` is missing, regardless of the actual transport. Default is unchanged (`false`, same behaviour as before).
+
 ### 5.0.6 (2026-08-15)
 * (GiacomoCa) Do not replace amazon URLs inside parameters to prevent redirect and rewrite issues; Fixes 404 errors during 2FA
 * (sidey79) Allows to fetch Cookies multiple times with one instance
