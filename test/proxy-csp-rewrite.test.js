@@ -94,9 +94,15 @@ try {
 
     const cases = [
         ['upgrade-insecure-requests;report-uri https://metrics.media-amazon.com/', ';report-uri https://metrics.media-amazon.com/'],
-        ["default-src 'self'; upgrade-insecure-requests; frame-ancestors 'none'", "default-src 'self'; frame-ancestors 'none'"],
-        ["frame-ancestors 'none'; UPGRADE-INSECURE-REQUESTS ", "frame-ancestors 'none'"],
+        ["default-src 'self'; upgrade-insecure-requests; frame-ancestors 'none'", "default-src 'self';; frame-ancestors 'none'"],
+        ["frame-ancestors 'none'; UPGRADE-INSECURE-REQUESTS ", "frame-ancestors 'none';"],
         ['upgrade-insecure-requests', ''],
+        ["frame-ancestors 'none', upgrade-insecure-requests", "frame-ancestors 'none',"],
+        ["upgrade-insecure-requests, frame-ancestors 'none'", ", frame-ancestors 'none'"],
+        ["default-src 'self'; upgrade-insecure-requests, frame-ancestors 'none'", "default-src 'self';, frame-ancestors 'none'"],
+        ["frame-ancestors 'none', UPGRADE-INSECURE-REQUESTS ; report-uri /report", "frame-ancestors 'none',; report-uri /report"],
+        ['upgrade-insecure-requests, upgrade-insecure-requests; upgrade-insecure-requests', ',;'],
+        ['report-uri /upgrade-insecure-requests, default-src https:', 'report-uri /upgrade-insecure-requests, default-src https:'],
         ["frame-ancestors 'none';", "frame-ancestors 'none';"],
         ['report-uri /upgrade-insecure-requests', 'report-uri /upgrade-insecure-requests'],
         [undefined, undefined]
