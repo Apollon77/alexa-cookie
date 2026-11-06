@@ -55,6 +55,9 @@ Partly based on [Amazon Alexa Remote Control](http://blog.loetzimmer.de/2017/10/
 Thank you for that work.
 
 ## Changelog:
+### 5.0.7 (WIP)
+* (reloxx13) Prevent Amazon CSP from upgrading HTTP login proxy requests to HTTPS
+
 ### 5.0.6 (2026-08-15)
 * (GiacomoCa) Do not replace amazon URLs inside parameters to prevent redirect and rewrite issues; Fixes 404 errors during 2FA
 * (sidey79) Allows to fetch Cookies multiple times with one instance
